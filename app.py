@@ -64,50 +64,50 @@ st.markdown("<p class='subtitulo-painel'>Painel de Desempenho Operacional</p>", 
 st.markdown("<p class='legenda-contrato'>Contrato Ativo: Vibra Campo Limpo | Sincronização em Nuvem (Google Drive)</p>", unsafe_allow_html=True)
 st.markdown("<hr style='margin: 0.5rem 0 1.5rem 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
 
-# 2. MOTOR DE LEITURA EM NUVEM (Mapeamento Absoluto por Posição de Coluna)
-URL_GOOGLE_DRIVE = "https://google.com"
+# 2. MOTOR DE LEITURA EM NUVEM FIXO E DEFINITIVO
+URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3iZWG8EA_Q6_cxiWyr_opAjXEZ6Vulx829avjgamQQwjicTC9cuOqVtlXQz3eYe7pUH3MAMtG9ZkR/pub?gid=1542027995&single=true&output=csv"
 
-@st.cache_data(ttl=0)  # Garante atualização em tempo real a cada F5
+@st.cache_data(ttl=0)  # TTL=0 garante atualização instantânea a cada F5
 def load_data_cloud(url):
-    # Força o pandas a ler todas as colunas como texto inicialmente para evitar quebras
+    # Força a leitura inicial de todas as colunas como strings para evitar incompatibilidades
     df = pd.read_csv(url, dtype=str)
     
     if df.shape[1] < 4:
-        st.error("A tabela do Google Drive precisa conter pelo menos 4 colunas (Data, Equipe, Nome, Tarefa).")
+        st.error("A tabela do Google Drive precisa conter pelo menos 4 colunas básicas.")
         st.stop()
         
-    # Renomeação por INDICE ABSOLUTO (Independe do nome de coluna com espaços ou barras do Google)
+    # Renomeação por índice absoluto garantido
     df.columns = ['DATA_ORIGINAL', 'EQUIPE', 'NOME', 'TAREFA_ATIVIDADE'] + list(df.columns[4:])
     
-    # Tratamento e conversão segura da coluna de data
+    # Conversão rigorosa de datas para o ecossistema Python
     df['DATETIME'] = pd.to_datetime(df['DATA_ORIGINAL'], format='%d/%m/%Y', errors='coerce')
     df['DATA'] = df['DATETIME'].dt.date
     
-    # Remove linhas onde a data é inválida ou vazia
+    # Elimina linhas sem data válida
     df = df.dropna(subset=['DATA'])
     return df
 
 try:
     df_raw = load_data_cloud(URL_GOOGLE_DRIVE)
 except Exception as e:
-    st.error(f"Erro crítico de conexão com o Google Drive: {e}")
+    st.error(f"Erro crítico ao ler planilha em nuvem: {e}")
     st.stop()
 
 if df_raw is None or df_raw.empty:
-    st.error("Nenhum dado encontrado ou link inválido no repositório.")
+    st.error("Nenhum dado válido encontrado no link fornecido.")
     st.stop()
 
-# Tratamento rigido de nulos: Células vazias viram texto limpo em branco
+# Saneamento e limpeza de dados nulos
 df_raw['EQUIPE'] = df_raw['EQUIPE'].fillna("Não Informado").astype(str).str.strip()
 df_raw['NOME'] = df_raw['NOME'].fillna("Não Informado").astype(str).str.strip()
 df_raw['TAREFA_ATIVIDADE'] = df_raw['TAREFA_ATIVIDADE'].fillna("").astype(str).str.strip()
 
-# REGRA DE PRESENÇA BLINDADA: Filtra strings e trata células 100% vazias como falta
+# REGRA DE PRESENÇA BLINDADA: Identifica faltas textuais ou células vazias
 df_raw['STATUS_PRESENCA'] = df_raw['TAREFA_ATIVIDADE'].str.upper().apply(
     lambda x: "Falta" if "FALTOU" in x or "AUSENTE" in x or x == "" else "Presente"
 )
 
-# Geração da estrutura de fechamento mensal cronológica
+# Geração das colunas de fechamento mensal por extenso
 df_raw['MES_ANO'] = df_raw['DATETIME'].dt.strftime('%m/%Y - %B')
 meses_pt = {
     'January': 'Janeiro', 'February': 'Fevereiro', 'March': 'Março', 'April': 'Abril',
@@ -117,30 +117,25 @@ meses_pt = {
 for en, pt in meses_pt.items():
     df_raw['MES_ANO'] = df_raw['MES_ANO'].str.replace(en, pt, case=False)
 
-# 3. FILTROS ESTRUTURADOS NA BARRA LATERAL
+# 3. FILTROS OPERACIONAIS NA BARRA LATERAL
 st.sidebar.markdown("<h2 style='font-size:1.2rem; color:#FFFFFF; font-weight:700; margin-bottom:15px; margin-top:0px;'>🎯 Painel de Filtros</h2>", unsafe_allow_html=True)
 
-# Filtro 1: Equipe
 equipes = ["Todos"] + sorted(list(df_raw['EQUIPE'].unique()))
 equipe_sel = st.sidebar.selectbox("Filtro por Equipe", equipes)
 
-# Filtro 2: Nome (Dependente da Equipe)
 df_filt_nome = df_raw[df_raw['EQUIPE'] == equipe_sel] if equipe_sel != "Todos" else df_raw
 nomes = ["Todos"] + sorted(list(df_filt_nome['NOME'].unique()))
 nome_sel = st.sidebar.selectbox("Filtro por Funcionário", nomes)
 
-# Filtro 3: Rádio de Frequência
 filtro_presenca = st.sidebar.radio("Filtro de Frequência", ["Todos", "Apenas Presentes", "Apenas Faltas"])
 
-# Filtro 4: Tarefa / Atividade (Isola faltas da listagem de tarefas para manter a estética limpa)
 df_filt_tar = df_raw[df_raw['STATUS_PRESENCA'] == "Presente"]
 tarefas = ["Todos"] + sorted(list(df_filt_tar['TAREFA_ATIVIDADE'].unique()))
 tarefa_sel = st.sidebar.selectbox("Filtro por Tarefa / Atividade", tarefas)
 
-# CORREÇÃO DO FILTRO DE CALENDÁRIO: Força a conversão explícita para objetos date do Python
+# Extração de limites de tempo
 data_min = df_raw['DATA'].min()
 data_max = df_raw['DATA'].max()
-
 if isinstance(data_min, datetime.datetime): data_min = data_min.date()
 if isinstance(data_max, datetime.datetime): data_max = data_max.date()
 
@@ -151,7 +146,7 @@ datas_sel = st.sidebar.date_input(
     max_value=data_max
 )
 
-# 4. PROCESSAMENTO APLICADO DOS FILTROS NO DATAFRAME FINAL
+# 4. PROCESSAMENTO E FILTRAGEM DO DATAFRAME FINAL
 df_final = df_raw.copy()
 if equipe_sel != "Todos": df_final = df_final[df_final['EQUIPE'] == equipe_sel]
 if nome_sel != "Todos": df_final = df_final[df_final['NOME'] == nome_sel]
@@ -162,9 +157,12 @@ if filtro_presenca == "Apenas Presentes":
 elif filtro_presenca == "Apenas Faltas": 
     df_final = df_final[df_final['STATUS_PRESENCA'] == "Falta"]
 
-if isinstance(datas_sel, (list, tuple)) and len(datas_sel) == 2:
-    data_inicio, data_fim = datas_sel
-    df_final = df_final[(df_final['DATA'] >= data_inicio) & (df_final['DATA'] <= data_fim)]
+# Correção lógica contra seleções parciais ou clique único no calendário do Streamlit
+if isinstance(datas_sel, (list, tuple)):
+    if len(datas_sel) == 2:
+        df_final = df_final[(df_final['DATA'] >= datas_sel[0]) & (df_final['DATA'] <= datas_sel[1])]
+    elif len(datas_sel) == 1:
+        df_final = df_final[df_final['DATA'] == datas_sel[0]]
 
 # 5. CARTÕES EXECUTIVOS DE MÉTRICAS (KPIs)
 total_reg = len(df_final)
@@ -209,3 +207,7 @@ st.markdown("Auditoria consolidada de dias trabalhados e faltas por funcionário
 
 lista_meses = sorted(list(df_raw['MES_ANO'].unique()))
 mes_selecionado = st.selectbox("Selecione o Mês para Fechamento de Frequência", lista_meses)
+df_mes = df_raw[df_raw['MES_ANO'] == mes_selecionado]
+
+if not df_mes.empty:
+    df_presencas_calc = df_mes[df_mes['STATUS_PRESENCA'] == 'Presente'].groupby(['EQUIPE', 'NOME'])['DATA'].nunique().reset_index(name='DIAS NA OBRA')
