@@ -63,7 +63,7 @@ st.markdown("<p class='legenda-contrato'>Contrato Ativo: Vibra Campo Limpo | Sin
 st.markdown("<hr style='margin: 0.5rem 0 1.5rem 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
 
 # 2. MOTOR DE LEITURA EM NUVEM BLINDADO (ONLINE)
-URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3iZWG8EA_Q6_cxiWyr_opAjXEZ6Vulx829avjgamQQwjicTC9cuOqVtlXQz3eYe7pUH3MAMtG9ZkR/pub?gid=1542027995&single=true&output=csv"
+URL_GOOGLE_DRIVE = "https://google.com"
 
 @st.cache_data(ttl=0)  # TTL=0 garante atualização instantânea a cada F5
 def load_data_cloud(url):
@@ -73,7 +73,7 @@ def load_data_cloud(url):
     colunas_originais = [str(col).strip().upper() for col in df.columns]
     df.columns = colunas_originais
     
-    # 2. Varre as colunas buscando por termos parciais para evitar quebra por acentos, espaços ou caracteres especiais
+    # 2. Varre as colunas buscando por termos parciais para evitar quebra por acertos, espaços ou caracteres especiais
     mapa_seguro = {}
     for col in df.columns:
         if "DATA" in col:
@@ -82,7 +82,7 @@ def load_data_cloud(url):
             mapa_seguro[col] = "EQUIPE"
         elif "NOME" in col:
             mapa_seguro[col] = "NOME"
-        elif "TAREFA" in col or "ATIVI" in col or "TAREFA" in col:
+        elif "TAREFA" in col or "ATIVI" in col:
             mapa_seguro[col] = "TAREFA_ATIVIDADE"
             
     df = df.rename(columns=mapa_seguro)
