@@ -62,14 +62,32 @@ st.markdown("<p class='subtitulo-painel'>Painel de Desempenho Operacional</p>", 
 st.markdown("<p class='legenda-contrato'>Contrato Ativo: Vibra Campo Limpo | Sincronização em Nuvem (Google Drive)</p>", unsafe_allow_html=True)
 st.markdown("<hr style='margin: 0.5rem 0 1.5rem 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
 
-# 2. MOTOR DE LEITURA EM NUVEM
-URL_GOOGLE_DRIVE = "https://google.com"
+# 2. MOTOR DE LEITURA EM NUVEM BLINDADO (ONLINE)
+URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3iZWG8EA_Q6_cxiWyr_opAjXEZ6Vulx829avjgamQQwjicTC9cuOqVtlXQz3eYe7pUH3MAMtG9ZkR/pub?gid=1542027995&single=true&output=csv"
 
 @st.cache_data(ttl=0)  # TTL=0 garante atualização instantânea a cada F5
 def load_data_cloud(url):
     df = pd.read_csv(url)
-    df.columns = [str(col).strip().upper() for col in df.columns]
     
+    # 1. Converte todas as colunas existentes para strings limpas e em maiúsculas
+    colunas_originais = [str(col).strip().upper() for col in df.columns]
+    df.columns = colunas_originais
+    
+    # 2. Varre as colunas buscando por termos parciais para evitar quebra por acentos, espaços ou caracteres especiais
+    mapa_seguro = {}
+    for col in df.columns:
+        if "DATA" in col:
+            mapa_seguro[col] = "DATA"
+        elif "EQUIPE" in col:
+            mapa_seguro[col] = "EQUIPE"
+        elif "NOME" in col:
+            mapa_seguro[col] = "NOME"
+        elif "TAREFA" in col or "ATIVI" in col or "TAREFA" in col:
+            mapa_seguro[col] = "TAREFA_ATIVIDADE"
+            
+    df = df.rename(columns=mapa_seguro)
+    
+    # Validação de data robusta
     if 'DATA' in df.columns:
         df['DATETIME'] = pd.to_datetime(df['DATA'], format='%d/%m/%Y', errors='coerce')
         df['DATA'] = df['DATETIME'].dt.date
@@ -83,14 +101,14 @@ except Exception as e:
     st.stop()
 
 if df_raw is None or df_raw.empty:
-    st.error("Nenhum dado encontrado ou link inválido.")
+    st.error("Nenhum dado encontrado ou link inválido no repositório.")
     st.stop()
 
-# Tratamento de nulos: Células vazias viram texto em branco
-df_raw['TAREFA / ATIVIDADE'] = df_raw['TAREFA / ATIVIDADE'].fillna("").astype(str).str.strip()
+# Tratamento para células em branco na tarefa mapeada com segurança
+df_raw['TAREFA_ATIVIDADE'] = df_raw['TAREFA_ATIVIDADE'].fillna("").astype(str).str.strip()
 
 # REGRA DE PRESENÇA INTELIGENTE
-df_raw['STATUS_PRESENCA'] = df_raw['TAREFA / ATIVIDADE'].str.upper().apply(
+df_raw['STATUS_PRESENCA'] = df_raw['TAREFA_ATIVIDADE'].str.upper().apply(
     lambda x: "Falta" if "FALTOU" in x or "AUSENTE" in x or x == "" else "Presente"
 )
 
@@ -117,7 +135,7 @@ nome_sel = st.sidebar.selectbox("Filtro por Funcionário", nomes)
 filtro_presenca = st.sidebar.radio("Filtro de Frequência", ["Todos", "Apenas Presentes", "Apenas Faltas"])
 
 df_filt_tar = df_raw[df_raw['STATUS_PRESENCA'] == "Presente"]
-tarefas = ["Todos"] + sorted(list(df_filt_tar['TAREFA / ATIVIDADE'].dropna().unique()))
+tarefas = ["Todos"] + sorted(list(df_filt_tar['TAREFA_ATIVIDADE'].dropna().unique()))
 tarefa_sel = st.sidebar.selectbox("Filtro por Tarefa / Atividade", tarefas)
 
 data_min, data_max = df_raw['DATA'].min(), df_raw['DATA'].max()
@@ -127,7 +145,7 @@ datas_sel = st.sidebar.date_input("Intervalo de Tempo", [data_min, data_max], mi
 df_final = df_raw.copy()
 if equipe_sel != "Todos": df_final = df_final[df_final['EQUIPE'] == equipe_sel]
 if nome_sel != "Todos": df_final = df_final[df_final['NOME'] == nome_sel]
-if tarefa_sel != "Todos": df_final = df_final[df_final['TAREFA / ATIVIDADE'] == tarefa_sel]
+if tarefa_sel != "Todos": df_final = df_final[df_final['TAREFA_ATIVIDADE'] == tarefa_sel]
 if filtro_presenca == "Apenas Presentes": df_final = df_final[df_final['STATUS_PRESENCA'] == "Presente"]
 elif filtro_presenca == "Apenas Faltas": df_final = df_final[df_final['STATUS_PRESENCA'] == "Falta"]
 
@@ -164,8 +182,8 @@ with g1:
 with g2:
     st.markdown("**Top 5 Atividades Mais Executadas**")
     if not df_final.empty:
-        df_ranking_data = df_final[(df_final['STATUS_PRESENCA'] == 'Presente') & (df_final['TAREFA / ATIVIDADE'] != "")]
-        df_ranking = df_ranking_data['TAREFA / ATIVIDADE'].value_counts().head(5)
+        df_ranking_data = df_final[(df_final['STATUS_PRESENCA'] == 'Presente') & (df_final['TAREFA_ATIVIDADE'] != "")]
+        df_ranking = df_ranking_data['TAREFA_ATIVIDADE'].value_counts().head(5)
         st.bar_chart(df_ranking, color="#475569", use_container_width=True)
     else:
         st.info("Sem atividades mapeadas.")
@@ -185,15 +203,3 @@ if not df_mes.empty:
     df_fechamento = pd.merge(todas_equipes_nomes, df_presencas_calc, on=['EQUIPE', 'NOME'], how='left').fillna(0)
     df_fechamento = pd.merge(df_fechamento, df_faltas_calc, on=['EQUIPE', 'NOME'], how='left').fillna(0)
     df_fechamento['DIAS NA OBRA'] = df_fechamento['DIAS NA OBRA'].astype(int)
-    df_fechamento['DIAS DE FALTA'] = df_fechamento['DIAS DE FALTA'].astype(int)
-    df_fechamento = df_fechamento.sort_values(by=['EQUIPE', 'NOME'])
-    st.dataframe(df_fechamento, use_container_width=True, hide_index=True)
-else:
-    st.info("Nenhum dado encontrado para o mês selecionado.")
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# 8. Visão Detalhada
-st.markdown("### 📋 Visão Detalhada dos Registros (Linha por Linha)")
-df_exibicao = df_final.drop(columns=['STATUS_PRESENCA', 'MES_ANO', 'DATETIME'])
-st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
