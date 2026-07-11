@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 
-# ==================== CONFIGURAÇÃO DA PÁGINA ====================
+# ===================== CONFIGURAÇÃO DA PÁGINA =====================
 st.set_page_config(
     page_title="Augusto Construções BI",
     page_icon="🏗️",
@@ -9,242 +10,195 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ==================== ESTILIZAÇÃO CSS ====================
+# ===================== ESTILIZAÇÃO PROFISSIONAL =====================
 st.markdown("""
     <style>
     .stApp { background-color: #F1F5F9; }
-    .main .block-container { 
-        padding-top: 1.5rem; 
-        padding-bottom: 1.5rem; 
-        max-width: 95%; 
-    }
+    .main .block-container { padding-top: 1.8rem; padding-bottom: 2rem; max-width: 98%; }
     .marca-principal { 
         color: #1E3A8A; 
         font-weight: 900; 
-        font-size: 2.6rem; 
-        letter-spacing: -0.05em; 
-        margin-bottom: 0rem; 
-        line-height: 1.1; 
+        font-size: 2.8rem; 
+        letter-spacing: -0.04em; 
+        margin-bottom: 0.2rem; 
     }
     .subtitulo-painel { 
         color: #334155; 
         font-weight: 700; 
-        font-size: 1.6rem; 
-        margin-top: 0.2rem; 
-        margin-bottom: 0.2rem; 
-        letter-spacing: -0.03em; 
+        font-size: 1.65rem; 
+        margin-top: 0; 
     }
     .legenda-contrato { 
         color: #64748B; 
-        font-size: 0.95rem; 
-        margin-top: 0rem; 
-        margin-bottom: 0.5rem; 
-    }
-    h3 { 
-        color: #1E293B; 
-        font-weight: 700; 
-        font-size: 1.4rem; 
-        margin-top: 1.5rem; 
-        margin-bottom: 1rem; 
+        font-size: 1rem; 
+        margin-top: 0; 
     }
     [data-testid="stMetricContainer"] {
-        background-color: #FFFFFF; 
-        padding: 22px 25px; 
-        border-radius: 12px; 
+        background-color: #FFFFFF;
+        padding: 25px 30px;
+        border-radius: 14px;
         border: 1px solid #E2E8F0;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 
-                    0 2px 4px -1px rgba(0, 0, 0, 0.03);
-    }
-    [data-testid="stMetricLabel"] { 
-        color: #475569 !important; 
-        font-weight: 600 !important; 
-        font-size: 0.95rem !important; 
-    }
-    [data-testid="stMetricValue"] { 
-        color: #0F172A !important; 
-        font-weight: 700 !important; 
-        font-size: 2rem !important; 
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }
     </style>
 """, unsafe_allow_html=True)
 
 st.markdown("<h1 class='marca-principal'>🏗️ AUGUSTO CONSTRUÇÕES</h1>", unsafe_allow_html=True)
 st.markdown("<p class='subtitulo-painel'>Painel de Desempenho Operacional</p>", unsafe_allow_html=True)
-st.markdown("<p class='legenda-contrato'>Contrato Ativo Vibra Campo Limpo • Sincronização em Nuvem (Google Drive)</p>", unsafe_allow_html=True)
-st.markdown("<hr style='margin: 0.5rem 0 1.5rem 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
+st.markdown("<p class='legenda-contrato'>Contrato Ativo • Vibra Campo Limpo • Sincronização em Nuvem (Google Drive)</p>", unsafe_allow_html=True)
+st.markdown("---")
 
-# ==================== CARREGAMENTO DOS DADOS ====================
-URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3iZWG8EA_Q6_cxiWyr_opAjXEZ6Vulx829avjgamQQwjicTC9cuOqVtlXQz3eYe7pUH3MAMtG9ZkRpubg/pub?gid=1542027995&single=true&output=csv"
-
-@st.cache_data(ttl=300)  # 5 minutos de cache
-def load_data_cloud(url):
-    df = pd.read_csv(url)
-    df.columns = [str(col).strip().upper() for col in df.columns]
-    
-    if 'DATA' in df.columns:
-        df['DATETIME'] = pd.to_datetime(df['DATA'], format='%d/%m/%Y', errors='coerce')
-        df['DATA'] = df['DATETIME'].dt.date
-        df = df.dropna(subset=['DATA'])
-    return df
-
-try:
-    df_raw = load_data_cloud(URL_GOOGLE_DRIVE)
-except Exception as e:
-    st.error(f"Erro ao conectar com o Google Drive: {e}")
-    st.stop()
-
-if df_raw is None or df_raw.empty:
-    st.error("Nenhum dado encontrado ou link inválido.")
-    st.stop()
-
-# ==================== TRATAMENTO DE DADOS ====================
-# Tratamento de nulos
-df_raw['TAREFA  ATIVIDADE'] = df_raw['TAREFA  ATIVIDADE'].fillna('').astype(str).str.strip()
-df_raw['OBSERVAÇÕES'] = df_raw.get('OBSERVAÇÕES', '').fillna('').astype(str).str.strip()  # Nova coluna
-
-# Regra de Presença
-df_raw['STATUS_PRESENCA'] = df_raw['TAREFA  ATIVIDADE'].str.upper().apply(
-    lambda x: 'Falta' if any(kw in x for kw in ['FALTOU', 'AUSENTE']) or x.strip() == '' else 'Presente'
+# ===================== CONFIGURAÇÃO DO GOOGLE SHEETS =====================
+st.sidebar.header("🔗 Conexão com Dados")
+URL_GOOGLE_DRIVE = st.sidebar.text_input(
+    "Link Publicado do Google Sheets (CSV)",
+    value="https://docs.google.com/spreadsheets/d/e/SEU_LINK_AQUI/pub?output=csv",
+    help="Vá em Arquivo > Compartilhar > Publicar na Web > Copie o link com output=csv"
 )
 
-# Mês/Ano
+@st.cache_data(ttl=300)  # Atualiza a cada 5 minutos
+def load_data_cloud(url):
+    try:
+        df = pd.read_csv(url)
+        df.columns = [str(col).strip().upper() for col in df.columns]
+        
+        if 'DATA' in df.columns:
+            # Tenta diferentes formatos de data
+            df['DATETIME'] = pd.to_datetime(df['DATA'], format='%d/%m/%Y', errors='coerce')
+            if df['DATETIME'].isna().all():
+                df['DATETIME'] = pd.to_datetime(df['DATA'], format='%d%m%Y', errors='coerce')
+            
+            df['DATA'] = df['DATETIME'].dt.date
+            df = df.dropna(subset=['DATA'])
+        return df
+    except Exception as e:
+        st.error(f"❌ Erro ao conectar com o Google Drive: {e}")
+        st.info("Verifique se o link está publicado corretamente como CSV.")
+        return None
+
+df_raw = load_data_cloud(URL_GOOGLE_DRIVE)
+
+if df_raw is None or df_raw.empty:
+    st.stop()
+
+# ===================== TRATAMENTO DE DADOS =====================
+df_raw['TAREFA  ATIVIDADE'] = df_raw['TAREFA  ATIVIDADE'].fillna('').astype(str).str.strip()
+df_raw['OBSERVAÇÕES'] = df_raw.get('OBSERVAÇÕES', '').fillna('').astype(str).str.strip()
+
+# Regra Inteligente de Presença
+df_raw['STATUS_PRESENCA'] = df_raw['TAREFA  ATIVIDADE'].str.upper().apply(
+    lambda x: 'Falta' if any(kw in x for kw in ['FALTOU', 'AUSENTE', 'FALTA']) or x.strip() == '' else 'Presente'
+)
+
+# Mês/Ano em Português
 df_raw['MES_ANO'] = df_raw['DATETIME'].dt.strftime('%m/%Y - %B')
 meses_pt = {
-    'January': 'Janeiro', 'February': 'Fevereiro', 'March': 'Março', 'April': 'Abril',
-    'May': 'Maio', 'June': 'Junho', 'July': 'Julho', 'August': 'Agosto',
-    'September': 'Setembro', 'October': 'Outubro', 'November': 'Novembro', 'December': 'Dezembro'
+    'January':'Janeiro','February':'Fevereiro','March':'Março','April':'Abril',
+    'May':'Maio','June':'Junho','July':'Julho','August':'Agosto',
+    'September':'Setembro','October':'Outubro','November':'Novembro','December':'Dezembro'
 }
 for en, pt in meses_pt.items():
     df_raw['MES_ANO'] = df_raw['MES_ANO'].str.replace(en, pt, case=False)
 
-# ==================== FILTROS ====================
-st.sidebar.markdown("### 🎯 Painel de Filtros")
+# ===================== FILTROS LATERAIS =====================
+st.sidebar.markdown("### 🎯 Filtros")
 
 equipes = ["Todos"] + sorted(df_raw['EQUIPE'].dropna().unique().tolist())
-equipe_sel = st.sidebar.selectbox("Filtro por Equipe", equipes)
+equipe_sel = st.sidebar.selectbox("Equipe", equipes)
 
+# Filtra nomes conforme equipe
 df_filt_nome = df_raw[df_raw['EQUIPE'] == equipe_sel] if equipe_sel != "Todos" else df_raw
 nomes = ["Todos"] + sorted(df_filt_nome['NOME'].dropna().unique().tolist())
-nome_sel = st.sidebar.selectbox("Filtro por Funcionário", nomes)
+nome_sel = st.sidebar.selectbox("Funcionário", nomes)
 
-filtro_presenca = st.sidebar.radio("Filtro de Frequência", ["Todos", "Apenas Presentes", "Apenas Faltas"])
+filtro_presenca = st.sidebar.radio("Frequência", ["Todos", "Apenas Presentes", "Apenas Faltas"])
 
 df_filt_tar = df_raw[df_raw['STATUS_PRESENCA'] == "Presente"]
 tarefas = ["Todos"] + sorted(df_filt_tar['TAREFA  ATIVIDADE'].dropna().unique().tolist())
-tarefa_sel = st.sidebar.selectbox("Filtro por Tarefa / Atividade", tarefas)
+tarefa_sel = st.sidebar.selectbox("Tarefa / Atividade", tarefas)
 
 data_min, data_max = df_raw['DATA'].min(), df_raw['DATA'].max()
-datas_sel = st.sidebar.date_input("Intervalo de Tempo", [data_min, data_max], 
-                                 min_value=data_min, max_value=data_max)
+datas_sel = st.sidebar.date_input("Período", [data_min, data_max], min_value=data_min, max_value=data_max)
 
-# Filtro de Observações
-busca_obs = st.sidebar.text_input("🔍 Buscar nas Observações", "")
+busca_obs = st.sidebar.text_input("🔍 Buscar em Observações", "")
 
-# ==================== APLICAÇÃO DOS FILTROS ====================
+# ===================== APLICAÇÃO DOS FILTROS =====================
 df_final = df_raw.copy()
 
-if equipe_sel != "Todos":
-    df_final = df_final[df_final['EQUIPE'] == equipe_sel]
-if nome_sel != "Todos":
-    df_final = df_final[df_final['NOME'] == nome_sel]
-if tarefa_sel != "Todos":
-    df_final = df_final[df_final['TAREFA  ATIVIDADE'] == tarefa_sel]
-if filtro_presenca == "Apenas Presentes":
-    df_final = df_final[df_final['STATUS_PRESENCA'] == "Presente"]
-elif filtro_presenca == "Apenas Faltas":
-    df_final = df_final[df_final['STATUS_PRESENCA'] == "Falta"]
-
+if equipe_sel != "Todos": df_final = df_final[df_final['EQUIPE'] == equipe_sel]
+if nome_sel != "Todos": df_final = df_final[df_final['NOME'] == nome_sel]
+if tarefa_sel != "Todos": df_final = df_final[df_final['TAREFA  ATIVIDADE'] == tarefa_sel]
+if filtro_presenca == "Apenas Presentes": df_final = df_final[df_final['STATUS_PRESENCA'] == "Presente"]
+if filtro_presenca == "Apenas Faltas": df_final = df_final[df_final['STATUS_PRESENCA'] == "Falta"]
 if busca_obs:
     df_final = df_final[df_final['OBSERVAÇÕES'].str.contains(busca_obs, case=False, na=False)]
 
 if len(datas_sel) == 2:
-    data_inicio, data_fim = datas_sel
-    df_final = df_final[(df_final['DATA'] >= data_inicio) & (df_final['DATA'] <= data_fim)]
+    df_final = df_final[(df_final['DATA'] >= datas_sel[0]) & (df_final['DATA'] <= datas_sel[1])]
 
-# ==================== KPIs ====================
+# ===================== KPIs =====================
 total_reg = len(df_final)
 total_faltas = len(df_final[df_final['STATUS_PRESENCA'] == "Falta"])
 total_pres = total_reg - total_faltas
 
-c1, c2, c3, c4 = st.columns(4)
-with c1:
-    st.metric("Total de Lançamentos", f"{total_reg:,}")
-with c2:
-    st.metric("Funcionários Ativos", f"{df_final['NOME'].nunique()}")
-with c3:
-    st.metric("Presenças Confirmadas", f"{total_pres:,}")
-with c4:
-    st.metric("Faltas Registradas 🚨", f"{total_faltas:,}")
+col1, col2, col3, col4 = st.columns(4)
+with col1: st.metric("Total de Lançamentos", f"{total_reg:,}")
+with col2: st.metric("Funcionários Ativos", df_final['NOME'].nunique())
+with col3: st.metric("Presenças Confirmadas", f"{total_pres:,}")
+with col4: st.metric("Faltas Registradas", f"{total_faltas:,}", delta=None)
 
-# ==================== GRÁFICOS ====================
-st.markdown("### 📊 Indicadores e Gráficos Gerenciais")
+# ===================== GRÁFICOS =====================
+st.markdown("### 📊 Análise Visual")
 g1, g2 = st.columns(2)
 
 with g1:
     st.markdown("**Volume Diário de Trabalho**")
     if not df_final.empty:
-        df_timeline = (df_final[df_final['STATUS_PRESENCA'] == 'Presente']
-                       .groupby('DATA').size().reset_index(name='Registros'))
-        st.line_chart(df_timeline.set_index('DATA'), use_container_width=True)
+        timeline = df_final[df_final['STATUS_PRESENCA'] == 'Presente'].groupby('DATA').size()
+        st.line_chart(timeline, use_container_width=True, color="#1E3A8A")
     else:
-        st.info("Sem dados para o período.")
+        st.info("Sem dados no período selecionado.")
 
 with g2:
-    st.markdown("**Top 5 Atividades Mais Executadas**")
+    st.markdown("**Top 5 Atividades**")
     if not df_final.empty:
-        df_ranking = (df_final[df_final['STATUS_PRESENCA'] == 'Presente']
-                      ['TAREFA  ATIVIDADE']
-                      .value_counts().head(5))
-        st.bar_chart(df_ranking, use_container_width=True)
-    else:
-        st.info("Sem atividades mapeadas.")
+        top_ativ = (df_final[df_final['STATUS_PRESENCA'] == 'Presente']['TAREFA  ATIVIDADE']
+                   .value_counts().head(5))
+        st.bar_chart(top_ativ, use_container_width=True)
 
-# ==================== FECHAMENTO MENSAL ====================
-st.markdown("### 🗓️ Resumo de Frequência Mensal (Fechamento de Cartão)")
-lista_meses = sorted(df_raw['MES_ANO'].unique())
-mes_selecionado = st.selectbox("Selecione o Mês para Fechamento de Frequência", lista_meses)
+# ===================== FECHAMENTO MENSAL =====================
+st.markdown("### 🗓️ Fechamento Mensal de Frequência")
+meses = sorted(df_raw['MES_ANO'].unique())
+mes_sel = st.selectbox("Selecione o Mês", meses)
 
-df_mes = df_raw[df_raw['MES_ANO'] == mes_selecionado]
+df_mes = df_raw[df_raw['MES_ANO'] == mes_sel]
 
 if not df_mes.empty:
-    df_presencas_calc = (df_mes[df_mes['STATUS_PRESENCA'] == 'Presente']
-                         .groupby(['EQUIPE', 'NOME'])['DATA']
-                         .nunique().reset_index(name='DIAS NA OBRA'))
+    pres = df_mes[df_mes['STATUS_PRESENCA']=='Presente'].groupby(['EQUIPE','NOME'])['DATA'].nunique().reset_index(name='DIAS NA OBRA')
+    falt = df_mes[df_mes['STATUS_PRESENCA']=='Falta'].groupby(['EQUIPE','NOME'])['DATA'].nunique().reset_index(name='DIAS DE FALTA')
     
-    df_faltas_calc = (df_mes[df_mes['STATUS_PRESENCA'] == 'Falta']
-                      .groupby(['EQUIPE', 'NOME'])['DATA']
-                      .nunique().reset_index(name='DIAS DE FALTA'))
+    base = df_mes[['EQUIPE','NOME']].drop_duplicates()
+    fechamento = base.merge(pres, on=['EQUIPE','NOME'], how='left').merge(falt, on=['EQUIPE','NOME'], how='left').fillna(0)
+    fechamento = fechamento.astype({'DIAS NA OBRA': int, 'DIAS DE FALTA': int})
     
-    todas_equipes_nomes = df_mes[['EQUIPE', 'NOME']].drop_duplicates()
-    
-    df_fechamento = pd.merge(todas_equipes_nomes, df_presencas_calc, on=['EQUIPE', 'NOME'], how='left').fillna(0)
-    df_fechamento = pd.merge(df_fechamento, df_faltas_calc, on=['EQUIPE', 'NOME'], how='left').fillna(0)
-    
-    df_fechamento = df_fechamento.astype({'DIAS NA OBRA': int, 'DIAS DE FALTA': int})
-    df_fechamento = df_fechamento.sort_values(by=['EQUIPE', 'NOME'])
-    
-    st.dataframe(df_fechamento, use_container_width=True, hide_index=True)
-else:
-    st.info("Nenhum dado encontrado para o mês selecionado.")
+    st.dataframe(fechamento.sort_values(by=['EQUIPE','NOME']), use_container_width=True, hide_index=True)
 
-# ==================== VISÃO DETALHADA ====================
+# ===================== VISÃO DETALHADA =====================
 st.markdown("### 📋 Visão Detalhada dos Registros")
-df_exibicao = df_final.drop(columns=['STATUS_PRESENCA', 'MES_ANO', 'DATETIME'], errors='ignore')
+df_exib = df_final.drop(columns=['STATUS_PRESENCA', 'MES_ANO', 'DATETIME'], errors='ignore')
 
-# Reordena colunas (Observações no final)
-if 'OBSERVAÇÕES' in df_exibicao.columns:
-    cols = [col for col in df_exibicao.columns if col != 'OBSERVAÇÕES'] + ['OBSERVAÇÕES']
-    df_exibicao = df_exibicao[cols]
+# Coloca Observações no final
+if 'OBSERVAÇÕES' in df_exib.columns:
+    cols = [c for c in df_exib.columns if c != 'OBSERVAÇÕES'] + ['OBSERVAÇÕES']
+    df_exib = df_exib[cols]
 
 st.dataframe(
-    df_exibicao,
+    df_exib,
     use_container_width=True,
     hide_index=True,
     column_config={
-        "OBSERVAÇÕES": st.column_config.TextColumn(
-            "Observações",
-            help="Anotações e observações do lançamento",
-            width="large"
-        )
+        "OBSERVAÇÕES": st.column_config.TextColumn("Observações", width="large")
     }
 )
+
+st.caption(f"Atualizado em: {datetime.now().strftime('%d/%m/%Y às %H:%M')}")
