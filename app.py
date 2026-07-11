@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import datetime
 
 # 1. Configuração da página do navegador (Visual Executivo Premium)
 st.set_page_config(
@@ -92,6 +93,10 @@ except Exception as e:
     st.error(f"Erro crítico de conexão com o Google Drive: {e}")
     st.stop()
 
+if df_raw is None or df_raw.empty:
+    st.error("Nenhum dado encontrado ou link inválido no repositório.")
+    st.stop()
+
 # Tratamento rigido de nulos: Células vazias viram texto limpo em branco
 df_raw['EQUIPE'] = df_raw['EQUIPE'].fillna("Não Informado").astype(str).str.strip()
 df_raw['NOME'] = df_raw['NOME'].fillna("Não Informado").astype(str).str.strip()
@@ -132,9 +137,19 @@ df_filt_tar = df_raw[df_raw['STATUS_PRESENCA'] == "Presente"]
 tarefas = ["Todos"] + sorted(list(df_filt_tar['TAREFA_ATIVIDADE'].unique()))
 tarefa_sel = st.sidebar.selectbox("Filtro por Tarefa / Atividade", tarefas)
 
-# Filtro 5: Calendário Dinâmico
-data_min, data_max = df_raw['DATA'].min(), df_raw['DATA'].max()
-datas_sel = st.sidebar.date_input("Intervalo de Tempo", [data_min, data_max], min_value=data_min, max_value=data_max)
+# CORREÇÃO DO FILTRO DE CALENDÁRIO: Força a conversão explícita para objetos date do Python
+data_min = df_raw['DATA'].min()
+data_max = df_raw['DATA'].max()
+
+if isinstance(data_min, datetime.datetime): data_min = data_min.date()
+if isinstance(data_max, datetime.datetime): data_max = data_max.date()
+
+datas_sel = st.sidebar.date_input(
+    "Intervalo de Tempo", 
+    [data_min, data_max], 
+    min_value=data_min, 
+    max_value=data_max
+)
 
 # 4. PROCESSAMENTO APLICADO DOS FILTROS NO DATAFRAME FINAL
 df_final = df_raw.copy()
@@ -179,7 +194,6 @@ with g1:
 
 with g2:
     st.markdown("**Top 5 Atividades Mais Executadas**")
-    # Filtra tarefas válidas e remove registros vazios do ranking para consistência visual
     df_ranking_data = df_final[(df_final['STATUS_PRESENCA'] == 'Presente') & (df_final['TAREFA_ATIVIDADE'] != "")]
     if not df_ranking_data.empty:
         df_ranking = df_ranking_data['TAREFA_ATIVIDADE'].value_counts().head(5)
@@ -195,7 +209,3 @@ st.markdown("Auditoria consolidada de dias trabalhados e faltas por funcionário
 
 lista_meses = sorted(list(df_raw['MES_ANO'].unique()))
 mes_selecionado = st.selectbox("Selecione o Mês para Fechamento de Frequência", lista_meses)
-df_mes = df_raw[df_raw['MES_ANO'] == mes_selecionado]
-
-if not df_mes.empty:
-    df_presencas_calc = df_mes[df_mes['STATUS_PRESENCA'] == 'Presente'].groupby(['EQUIPE', 'NOME'])['DATA'].nunique().reset_index(name='DIAS NA OBRA')
