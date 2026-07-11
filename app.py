@@ -14,9 +14,6 @@ st.markdown("""
     <style>
     .stApp { background-color: #F1F5F9; }
     .main .block-container { padding-top: 1.5rem; padding-bottom: 1.5rem; max-width: 95%; }
-    .marca-principal { color: #1E3A8A; font-weight: 900; font-size: 2.6rem; letter-spacing: -0.05em; margin-bottom: 0rem; line-height: 1.1; }
-    .subtitulo-painel { color: #334155; font-weight: 700; font-size: 1.6rem; margin-top: 0.2rem; margin-bottom: 0.2rem; letter-spacing: -0.03em; }
-    .legenda-contrato { color: #64748B; font-size: 0.95rem; margin-top: 0rem; margin-bottom: 0.5rem; }
     
     [data-testid="stMetricContainer"] {
         background-color: #FFFFFF; padding: 22px 25px; border-radius: 12px; border: 1px solid #E2E8F0;
@@ -25,22 +22,27 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# ===================== LOGO + TÍTULO =====================
-col_logo, col_titulo = st.columns([1.2, 5])
+# ===================== LOGO + TÍTULO (Versão Melhorada) =====================
+col_logo, col_titulo = st.columns([1.1, 5])
 
 with col_logo:
     st.image(
         "https://drive.google.com/uc?export=download&id=1YrL-wex96OXddunUAfQ9FoV_EjaPF-_X", 
-        width=180
+        width=185
     )
 
 with col_titulo:
     st.markdown("""
-        <h1 style='margin-top: 35px; color: #1E3A8A; font-weight: 900; 
-        font-size: 2.8rem; letter-spacing: -0.04em;'>
+        <h1 style='margin-top: 32px; color: #1E3A8A; font-weight: 900; 
+        font-size: 2.85rem; letter-spacing: -0.04em; line-height: 1.1;'>
         AUGUSTO ENGENHARIA
         </h1>
     """, unsafe_allow_html=True)
+
+st.markdown("<p class='subtitulo-painel' style='margin-top: -10px;'>Painel de Desempenho Operacional</p>", unsafe_allow_html=True)
+st.markdown("<p class='legenda-contrato'>Contrato Ativo: Vibra Campo Limpo | Sincronização em Nuvem (Google Drive)</p>", unsafe_allow_html=True)
+st.markdown("<hr style='margin: 0.8rem 0 1.8rem 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
+
 # ===================== DADOS =====================
 URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3iZWG8EA_Q6_cxiWyr_opAjXEZ6Vulx829avjgamQQwjicTC9cuOqVtlXQz3eYe7pUH3MAMtG9ZkR/pub?gid=1542027995&single=true&output=csv"
 
@@ -65,11 +67,11 @@ if df_raw is None or df_raw.empty:
     st.error("Nenhum dado encontrado ou link inválido.")
     st.stop()
 
-# Tratamento de nulos
+# Tratamento de colunas
 df_raw['TAREFA / ATIVIDADE'] = df_raw['TAREFA / ATIVIDADE'].fillna("").astype(str).str.strip()
 df_raw['OBSERVAÇÕES'] = df_raw.get('OBSERVAÇÕES', "").fillna("").astype(str).str.strip()
 
-# REGRA DE PRESENÇA
+# Presença
 df_raw['STATUS_PRESENCA'] = df_raw['TAREFA / ATIVIDADE'].str.upper().apply(
     lambda x: "Falta" if "FALTOU" in x or "AUSENTE" in x or x == "" else "Presente"
 )
@@ -115,7 +117,7 @@ if isinstance(datas_sel, (list, tuple)) and len(datas_sel) == 2:
     data_inicio, data_fim = datas_sel
     df_final = df_final[(df_final['DATA'] >= data_inicio) & (df_final['DATA'] <= data_fim)]
 
-# KPIs
+# ===================== KPIs =====================
 total_reg = len(df_final)
 total_faltas = len(df_final[df_final['STATUS_PRESENCA'] == "Falta"])
 total_pres = total_reg - total_faltas
@@ -128,7 +130,7 @@ with c4: st.metric("Faltas Registradas 🚨", f"{total_faltas}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# Gráficos, Fechamento Mensal e Visão Detalhada (mantidos iguais)
+# ===================== GRÁFICOS =====================
 st.markdown("### 📊 Indicadores e Gráficos Gerenciais")
 g1, g2 = st.columns(2)
 
@@ -138,6 +140,8 @@ with g1:
         df_timeline = df_final[df_final['STATUS_PRESENCA'] == 'Presente'].groupby('DATA').size().reset_index(name='Registros')
         df_timeline = df_timeline.set_index('DATA')
         st.line_chart(df_timeline, color="#1E3A8A", use_container_width=True)
+    else:
+        st.info("Sem dados para o período.")
 
 with g2:
     st.markdown("**Top 5 Atividades Mais Executadas**")
@@ -145,8 +149,10 @@ with g2:
         df_ranking_data = df_final[(df_final['STATUS_PRESENCA'] == 'Presente') & (df_final['TAREFA / ATIVIDADE'] != "")]
         df_ranking = df_ranking_data['TAREFA / ATIVIDADE'].value_counts().head(5)
         st.bar_chart(df_ranking, color="#475569", use_container_width=True)
+    else:
+        st.info("Sem atividades mapeadas.")
 
-# Resumo Mensal e Visão Detalhada (completo)
+# ===================== FECHAMENTO MENSAL =====================
 st.markdown("### 🗓️ Resumo de Frequência Mensal (Fechamento de Cartão)")
 lista_meses = sorted(list(df_raw['MES_ANO'].unique()))
 mes_selecionado = st.selectbox("Selecione o Mês para Fechamento de Frequência", lista_meses)
@@ -163,6 +169,7 @@ if not df_mes.empty:
     df_fechamento = df_fechamento.sort_values(by=['EQUIPE', 'NOME'])
     st.dataframe(df_fechamento, use_container_width=True, hide_index=True)
 
+# ===================== VISÃO DETALHADA =====================
 st.markdown("### 📋 Visão Detalhada dos Registros (Linha por Linha)")
 df_exibicao = df_final.drop(columns=['STATUS_PRESENCA', 'MES_ANO', 'DATETIME'], errors='ignore')
 
