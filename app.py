@@ -22,12 +22,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# ===================== LOGO + TÍTULO (Versão Melhorada) =====================
+# ===================== LOGO + TÍTULO =====================
 col_logo, col_titulo = st.columns([1.1, 5])
 
 with col_logo:
     st.image(
-        "https://drive.google.com/uc?export=download&id=1YrL-wex96OXddunUAfQ9FoV_EjaPF-_X", 
+        "https://drive.google.com/uc?id=1YrL-wex96OXddunUAfQ9FoV_EjaPF-_X", 
         width=185
     )
 
@@ -38,10 +38,6 @@ with col_titulo:
         AUGUSTO ENGENHARIA
         </h1>
     """, unsafe_allow_html=True)
-
-st.markdown("<p class='subtitulo-painel' style='margin-top: -10px;'>Painel de Desempenho Operacional</p>", unsafe_allow_html=True)
-st.markdown("<p class='legenda-contrato'>Contrato Ativo: Vibra Campo Limpo | Sincronização em Nuvem (Google Drive)</p>", unsafe_allow_html=True)
-st.markdown("<hr style='margin: 0.8rem 0 1.8rem 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
 
 # ===================== DADOS =====================
 URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3iZWG8EA_Q6_cxiWyr_opAjXEZ6Vulx829avjgamQQwjicTC9cuOqVtlXQz3eYe7pUH3MAMtG9ZkR/pub?gid=1542027995&single=true&output=csv"
