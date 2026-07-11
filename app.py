@@ -9,23 +9,51 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilização CSS Premium - Identidade Visual Augusto Construções
+# Estilização CSS Premium - Identidade Visual Augusto Construções com Super Contraste na Lateral
 st.markdown("""
     <style>
+    /* Fundo institucional cinza claro da área de gráficos */
     .stApp { background-color: #F1F5F9; }
     .main .block-container { padding-top: 1.5rem; padding-bottom: 1.5rem; max-width: 95%; }
+    
+    /* Topo do Painel */
     .marca-principal { color: #1E3A8A; font-weight: 900; font-size: 2.6rem; letter-spacing: -0.05em; margin-bottom: 0rem; line-height: 1.1; }
     .subtitulo-painel { color: #334155; font-weight: 700; font-size: 1.6rem; margin-top: 0.2rem; margin-bottom: 0.2rem; letter-spacing: -0.03em; }
     .legenda-contrato { color: #64748B; font-size: 0.95rem; margin-top: 0rem; margin-bottom: 0.5rem; }
     h3 { color: #1E293B; font-weight: 700; font-size: 1.4rem; margin-top: 1.5rem; margin-bottom: 1rem; }
     
+    /* Cartões de Métricas Estilizados */
     [data-testid="stMetricContainer"] {
         background-color: #FFFFFF; padding: 22px 25px; border-radius: 12px; border: 1px solid #E2E8F0;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
     }
     [data-testid="stMetricLabel"] { color: #475569 !important; font-weight: 600 !important; font-size: 0.95rem !important; }
     [data-testid="stMetricValue"] { color: #0F172A !important; font-weight: 700 !important; font-size: 2rem !important; }
-    [data-testid="stSidebar"] { background-color: #F8FAFC; border-right: 1px solid #E2E8F0; }
+    
+    /* =========================================================================
+       ⚠️ BLINDAGEM DA BARRA LATERAL: Força Fundo Escuro e Textos Brancos para Contraste Máximo
+       ========================================================================= */
+    [data-testid="stSidebar"] { 
+        background-color: #1E293B !important; 
+        border-right: 1px solid #334155; 
+    }
+    /* Força a cor branca em todos os textos, labels e botões de rádio da barra lateral */
+    [data-testid="stSidebar"] p, 
+    [data-testid="stSidebar"] label, 
+    [data-testid="stSidebar"] h2, 
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] .stWidgetLabel {
+        color: #FFFFFF !important;
+        font-weight: 600 !important;
+    }
+    /* Estiliza os fundos dos inputs dentro da lateral para não sumirem no fundo escuro */
+    [data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] {
+        background-color: #334155 !important;
+        border-radius: 8px;
+    }
+    [data-testid="stSidebar"] .stSelectbox div {
+        color: #FFFFFF !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -34,8 +62,8 @@ st.markdown("<p class='subtitulo-painel'>Painel de Desempenho Operacional</p>", 
 st.markdown("<p class='legenda-contrato'>Contrato Ativo: Vibra Campo Limpo | Sincronização em Nuvem (Google Drive)</p>", unsafe_allow_html=True)
 st.markdown("<hr style='margin: 0.5rem 0 1.5rem 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
 
-# 2. MOTOR DE LEITURA EM NUVEM (CORRIGIDO)
-URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3iZWG8EA_Q6_cxiWyr_opAjXEZ6Vulx829avjgamQQwjicTC9cuOqVtlXQz3eYe7pUH3MAMtG9ZkR/pub?gid=1542027995&single=true&output=csv"
+# 2. MOTOR DE LEITURA EM NUVEM
+URL_GOOGLE_DRIVE = "https://google.com"
 
 @st.cache_data(ttl=0)  # TTL=0 garante atualização instantânea a cada F5
 def load_data_cloud(url):
@@ -77,7 +105,7 @@ for en, pt in meses_pt.items():
     df_raw['MES_ANO'] = df_raw['MES_ANO'].str.replace(en, pt, case=False)
 
 # 3. Filtros Estruturados na Barra Lateral
-st.sidebar.markdown("<h2 style='font-size:1.2rem; color:#0F172A; font-weight:700; margin-bottom:15px;'>🎯 Painel de Filtros</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("<h2 style='font-size:1.2rem; color:#FFFFFF; font-weight:700; margin-bottom:15px; margin-top:0px;'>🎯 Painel de Filtros</h2>", unsafe_allow_html=True)
 
 equipes = ["Todos"] + sorted(list(df_raw['EQUIPE'].dropna().unique()))
 equipe_sel = st.sidebar.selectbox("Filtro por Equipe", equipes)
