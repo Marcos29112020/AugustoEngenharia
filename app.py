@@ -146,32 +146,35 @@ with g1:
 with g2:
     st.markdown("**🏆 Top 3 Funcionários com Menos Faltas**")
     if not df_final.empty:
+        # Inclui todos os funcionários (mesmo os com 0 faltas)
+        todas_pessoas = df_final[['NOME', 'EQUIPE']].drop_duplicates()
+        
         faltas_por_func = (df_final[df_final['STATUS_PRESENCA'] == 'Falta']
                           .groupby(['NOME', 'EQUIPE'])['DATA']
                           .count()
                           .reset_index(name='FALTAS'))
         
-        if faltas_por_func.empty:
-            st.info("Nenhuma falta registrada no período selecionado.")
-        else:
-            top_funcionarios = faltas_por_func.sort_values(by='FALTAS', ascending=True).head(3)
-            
-            st.dataframe(
-                top_funcionarios,
-                hide_index=True,
-                use_container_width=True,
-                column_config={
-                    "NOME": "Funcionário",
-                    "EQUIPE": "Equipe",
-                    "FALTAS": st.column_config.NumberColumn("Nº de Faltas", format="%d")
-                }
-            )
-            
-            st.bar_chart(
-                top_funcionarios.set_index('NOME')['FALTAS'],
-                color="#22C55E",
-                use_container_width=True
-            )
+        ranking = pd.merge(todas_pessoas, faltas_por_func, on=['NOME', 'EQUIPE'], how='left').fillna(0)
+        ranking['FALTAS'] = ranking['FALTAS'].astype(int)
+        
+        top_funcionarios = ranking.sort_values(by='FALTAS', ascending=True).head(3)
+        
+        st.dataframe(
+            top_funcionarios,
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "NOME": "Funcionário",
+                "EQUIPE": "Equipe",
+                "FALTAS": st.column_config.NumberColumn("Nº de Faltas", format="%d")
+            }
+        )
+        
+        st.bar_chart(
+            top_funcionarios.set_index('NOME')['FALTAS'],
+            color="#22C55E",
+            use_container_width=True
+        )
     else:
         st.info("Sem dados suficientes.")
 
