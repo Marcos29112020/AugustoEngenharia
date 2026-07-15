@@ -134,31 +134,44 @@ st.dataframe(
 st.markdown("---")
 
 # ===================== GRÁFICOS =====================
+# Antes eram 2 gráficos grandes (altura padrão ~400px) + 1 tabela full-width abaixo.
+# Agora: 3 colunas compactas na mesma faixa, com altura fixa reduzida (220px).
+# O gráfico de "faltas" foi mantido, mas vale lembrar que ele é redundante com a
+# tabela de Fechamento Mensal logo abaixo (que já traz os dias exatos por pessoa) —
+# se quiser cortar ainda mais a página, ele é o primeiro candidato a sair.
 st.markdown("### 📊 Análise de Desempenho")
+st.caption("Ranking acumulado no período filtrado — não representa uma linha do tempo.")
 
-g1, g2 = st.columns(2)
+g1, g2, g3 = st.columns(3)
 
 with g1:
-    st.markdown("**Evolução dos Serviços (Principais Atividades)**")
+    st.markdown("**Tarefas Mais Frequentes**")
     if not df_final.empty:
-        servicos = df_final['TAREFA / ATIVIDADE'].value_counts().head(8)
-        st.bar_chart(servicos, color="#1E3A8A", use_container_width=True)
+        servicos = df_final['TAREFA / ATIVIDADE'].value_counts().head(6)
+        st.bar_chart(servicos, color="#1E3A8A", use_container_width=True, height=220)
+    else:
+        st.info("Sem dados no período.")
 
 with g2:
-    st.markdown("**Funcionários Menos Faltosos**")
+    st.markdown("**Maior Nº de Presenças**")
     if not df_final.empty:
         presenca = (df_final.groupby('NOME')['STATUS_PRESENCA']
                    .apply(lambda x: (x == 'Presente').sum())
                    .sort_values(ascending=False).head(6))
-        st.bar_chart(presenca, color="#22C55E", use_container_width=True)
+        st.bar_chart(presenca, color="#22C55E", use_container_width=True, height=220)
+    else:
+        st.info("Sem dados no período.")
 
-st.markdown("**Aproveitamento por Equipe**")
-if not df_final.empty:
-    por_equipe = df_final.groupby('EQUIPE').agg(
-        QTD_PESSOAS=('NOME', 'nunique'),
-        TRABALHO_REALIZADO=('TAREFA / ATIVIDADE', 'count')
-    )
-    st.dataframe(por_equipe, use_container_width=True)
+with g3:
+    st.markdown("**Aproveitamento por Equipe**")
+    if not df_final.empty:
+        por_equipe = df_final.groupby('EQUIPE').agg(
+            QTD_PESSOAS=('NOME', 'nunique'),
+            TRABALHO_REALIZADO=('TAREFA / ATIVIDADE', 'count')
+        )
+        st.dataframe(por_equipe, use_container_width=True, height=220)
+    else:
+        st.info("Sem dados no período.")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
