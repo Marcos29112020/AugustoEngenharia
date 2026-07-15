@@ -9,14 +9,13 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# CSS Limpo e Moderno
+# CSS Limpo
 st.markdown("""
     <style>
     .stApp { background-color: #F8FAFC; }
     .main .block-container { padding-top: 1.8rem; padding-bottom: 2rem; max-width: 98%; }
     h1 { color: #1E3A8A; font-weight: 900; letter-spacing: -0.04em; margin-bottom: 0.3rem; }
     h3 { color: #334155; font-weight: 600; }
-    .metric-container { background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
     </style>
 """, unsafe_allow_html=True)
 
@@ -46,7 +45,6 @@ def load_data(url):
 
 df_raw = load_data(URL_GOOGLE_DRIVE)
 
-# Tratamento
 df_raw['TAREFA / ATIVIDADE'] = df_raw['TAREFA / ATIVIDADE'].fillna("").astype(str).str.strip()
 df_raw['OBSERVAÇÕES'] = df_raw.get('OBSERVAÇÕES', "").fillna("").astype(str).str.strip()
 
@@ -54,9 +52,7 @@ df_raw['STATUS_PRESENCA'] = df_raw['TAREFA / ATIVIDADE'].str.upper().apply(
     lambda x: "Falta" if "FALTOU" in x or "AUSENTE" in x or x == "" else "Presente"
 )
 
-df_raw['MES_ANO'] = df_raw['DATETIME'].dt.strftime('%m/%Y - %B')
-
-# ===================== FILTROS (Sidebar) =====================
+# ===================== FILTROS =====================
 st.sidebar.header("🎯 Filtros")
 
 equipes = ["Todos"] + sorted(df_raw['EQUIPE'].dropna().unique().tolist())
@@ -71,7 +67,7 @@ filtro_presenca = st.sidebar.radio("Frequência", ["Todos", "Apenas Presentes", 
 data_min, data_max = df_raw['DATA'].min(), df_raw['DATA'].max()
 datas_sel = st.sidebar.date_input("Período", [data_min, data_max], min_value=data_min, max_value=data_max)
 
-# Aplicação dos Filtros
+# Aplicar Filtros
 df_final = df_raw.copy()
 if equipe_sel != "Todos": df_final = df_final[df_final['EQUIPE'] == equipe_sel]
 if nome_sel != "Todos": df_final = df_final[df_final['NOME'] == nome_sel]
@@ -97,7 +93,7 @@ st.subheader("Desempenho da Equipe")
 g1, g2 = st.columns(2)
 
 with g1:
-    st.markdown("**Top 5 com Mais Presenças**")
+    st.markdown("**Top 5 Funcionários com Mais Presenças**")
     if not df_final.empty:
         top_pres = (df_final[df_final['STATUS_PRESENCA'] == 'Presente']
                    .groupby('NOME')['DATA'].count()
@@ -105,7 +101,7 @@ with g1:
         st.bar_chart(top_pres, color="#1E3A8A", use_container_width=True)
 
 with g2:
-    st.markdown("**Top 3 com Menos Faltas**")
+    st.markdown("**Top 3 Funcionários com Menos Faltas**")
     if not df_final.empty:
         todas = df_final[['NOME','EQUIPE']].drop_duplicates()
         faltas = (df_final[df_final['STATUS_PRESENCA']=='Falta']
@@ -113,12 +109,6 @@ with g2:
         ranking = pd.merge(todas, faltas, on='NOME', how='left').fillna(0)
         top3 = ranking.sort_values('FALTAS').head(3)
         st.bar_chart(top3.set_index('NOME')['FALTAS'], color="#22C55E", use_container_width=True)
-
-# Gráfico por Equipe
-st.markdown("**Presenças × Faltas por Equipe**")
-if not df_final.empty:
-    por_equipe = df_final.groupby('EQUIPE')['STATUS_PRESENCA'].value_counts().unstack(fill_value=0)
-    st.bar_chart(por_equipe, color=["#1E3A8A", "#EF4444"], use_container_width=True)
 
 st.markdown("---")
 
