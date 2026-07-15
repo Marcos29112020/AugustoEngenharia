@@ -9,20 +9,16 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilização CSS
+# Estilização
 st.markdown("""
     <style>
     .stApp { background-color: #F1F5F9; }
     .main .block-container { padding-top: 1.5rem; padding-bottom: 1.5rem; max-width: 95%; }
-    
-    [data-testid="stMetricContainer"] {
-        background-color: #FFFFFF; padding: 22px 25px; border-radius: 12px; border: 1px solid #E2E8F0;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-    }
+    h1 { color: #1E3A8A; font-weight: 900; letter-spacing: -0.04em; }
     </style>
     """, unsafe_allow_html=True)
 
-# ===================== LOGO + TÍTULO =====================
+# ===================== CABEÇALHO =====================
 col_logo, col_titulo = st.columns([1.3, 4.5])
 
 with col_logo:
@@ -30,13 +26,10 @@ with col_logo:
 
 with col_titulo:
     st.markdown("""
-        <h1 style='margin-top: 32px; color: #1E3A8A; font-weight: 900; 
-        font-size: 2.85rem; letter-spacing: -0.04em; line-height: 1.1;'>
-        AUGUSTO ENGENHARIA
-        </h1>
+        <h1 style='margin-top: 32px;'>AUGUSTO ENGENHARIA</h1>
     """, unsafe_allow_html=True)
 
-st.markdown("<p class='subtitulo-painel' style='margin-top: -8px;'>Painel de Desempenho Operacional</p>", unsafe_allow_html=True)
+st.markdown("<p class='subtitulo-painel'>Painel de Desempenho Operacional</p>", unsafe_allow_html=True)
 st.markdown("<p class='legenda-contrato'>Contrato Ativo: Vibra Campo Limpo | Sincronização em Nuvem (Google Drive)</p>", unsafe_allow_html=True)
 st.markdown("<hr style='margin: 0.8rem 0 1.8rem 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
 
@@ -73,13 +66,6 @@ df_raw['STATUS_PRESENCA'] = df_raw['TAREFA / ATIVIDADE'].str.upper().apply(
 )
 
 df_raw['MES_ANO'] = df_raw['DATETIME'].dt.strftime('%m/%Y - %B')
-meses_pt = {
-    'January': 'Janeiro', 'February': 'Fevereiro', 'March': 'Março', 'April': 'Abril',
-    'May': 'Maio', 'June': 'Junho', 'July': 'Julho', 'August': 'Agosto',
-    'September': 'Setembro', 'October': 'Outubro', 'November': 'Novembro', 'December': 'Dezembro'
-}
-for en, pt in meses_pt.items():
-    df_raw['MES_ANO'] = df_raw['MES_ANO'].str.replace(en, pt, case=False)
 
 # ===================== FILTROS =====================
 st.sidebar.markdown("<h2 style='font-size:1.2rem; color:#0F172A; font-weight:700; margin-bottom:15px;'>🎯 Painel de Filtros</h2>", unsafe_allow_html=True)
@@ -125,36 +111,40 @@ with c4: st.metric("Faltas Registradas 🚨", f"{total_faltas}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
+# ===================== LISTA DE FUNCIONÁRIOS =====================
+st.subheader(f"👥 Funcionários Ativos ({df_raw['NOME'].nunique()})")
+st.dataframe(df_raw[['NOME', 'EQUIPE']].drop_duplicates().sort_values('NOME'), 
+             hide_index=True, use_container_width=True)
+
+st.markdown("---")
+
 # ===================== GRÁFICOS =====================
-st.markdown("### 📊 Gráficos de Barras - Desempenho da Equipe")
+st.markdown("### 📊 Análise de Desempenho")
 
 g1, g2 = st.columns(2)
 
 with g1:
-    st.markdown("**Top 5 Funcionários com Mais Presenças**")
+    st.markdown("**1. Evolução dos Serviços (Principais Atividades)**")
     if not df_final.empty:
-        presencas = (df_final[df_final['STATUS_PRESENCA'] == 'Presente']
-                    .groupby(['NOME', 'EQUIPE'])['DATA']
-                    .count()
-                    .reset_index(name='PRESENCAS')
-                    .sort_values(by='PRESENCAS', ascending=False)
-                    .head(5))
-        st.bar_chart(presencas.set_index('NOME')['PRESENCAS'], color="#1E3A8A", use_container_width=True)
+        servicos = df_final['TAREFA / ATIVIDADE'].value_counts().head(10)
+        st.bar_chart(servicos, color="#1E3A8A", use_container_width=True)
 
 with g2:
-    st.markdown("**Top 3 Funcionários com Menos Faltas**")
+    st.markdown("**2. Funcionários Menos Faltosos**")
     if not df_final.empty:
-        todas_pessoas = df_final[['NOME', 'EQUIPE']].drop_duplicates()
-        faltas = (df_final[df_final['STATUS_PRESENCA'] == 'Falta']
-                 .groupby(['NOME', 'EQUIPE'])['DATA']
-                 .count()
-                 .reset_index(name='FALTAS'))
-        ranking = pd.merge(todas_pessoas, faltas, on=['NOME', 'EQUIPE'], how='left').fillna(0)
-        ranking['FALTAS'] = ranking['FALTAS'].astype(int)
-        top_menos_faltas = ranking.sort_values(by='FALTAS', ascending=True).head(3)
-        
-        st.bar_chart(top_menos_faltas.set_index('NOME')['FALTAS'], color="#22C55E", use_container_width=True)
-        st.dataframe(top_menos_faltas, hide_index=True, use_container_width=True)
+        presenca_rate = (df_final.groupby('NOME')['STATUS_PRESENCA']
+                        .apply(lambda x: (x == 'Presente').sum())
+                        .sort_values(ascending=False).head(8))
+        st.bar_chart(presenca_rate, color="#22C55E", use_container_width=True)
+
+# 3. Aproveitamento por Equipe
+st.markdown("**3. Aproveitamento por Equipe**")
+if not df_final.empty:
+    por_equipe = df_final.groupby('EQUIPE').agg(
+        QTD_PESSOAS=('NOME', 'nunique'),
+        TRABALHO_REALIZADO=('TAREFA / ATIVIDADE', 'count')
+    ).sort_values('TRABALHO_REALIZADO', ascending=False)
+    st.dataframe(por_equipe, use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
