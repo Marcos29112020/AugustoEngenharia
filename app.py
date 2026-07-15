@@ -130,53 +130,53 @@ with c4: st.metric("Faltas Registradas 🚨", f"{total_faltas}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ===================== GRÁFICOS =====================
-st.markdown("### 📊 Indicadores e Gráficos Gerenciais")
+# ===================== GRÁFICOS DE BARRAS =====================
+st.markdown("### 📊 Gráficos de Barras - Desempenho da Equipe")
+
 g1, g2 = st.columns(2)
 
 with g1:
-    st.markdown("**Volume Diário de Trabalho (Linha do Tempo)**")
+    st.markdown("**Top 5 Funcionários com Mais Presenças**")
     if not df_final.empty:
-        df_timeline = df_final[df_final['STATUS_PRESENCA'] == 'Presente'].groupby('DATA').size().reset_index(name='Registros')
-        df_timeline = df_timeline.set_index('DATA')
-        st.line_chart(df_timeline, color="#1E3A8A", use_container_width=True)
-    else:
-        st.info("Sem dados para o período.")
-
-with g2:
-    st.markdown("**🏆 Top 3 Funcionários com Menos Faltas**")
-    if not df_final.empty:
-        # Inclui todos os funcionários (mesmo os com 0 faltas)
-        todas_pessoas = df_final[['NOME', 'EQUIPE']].drop_duplicates()
-        
-        faltas_por_func = (df_final[df_final['STATUS_PRESENCA'] == 'Falta']
-                          .groupby(['NOME', 'EQUIPE'])['DATA']
-                          .count()
-                          .reset_index(name='FALTAS'))
-        
-        ranking = pd.merge(todas_pessoas, faltas_por_func, on=['NOME', 'EQUIPE'], how='left').fillna(0)
-        ranking['FALTAS'] = ranking['FALTAS'].astype(int)
-        
-        top_funcionarios = ranking.sort_values(by='FALTAS', ascending=True).head(3)
-        
-        st.dataframe(
-            top_funcionarios,
-            hide_index=True,
-            use_container_width=True,
-            column_config={
-                "NOME": "Funcionário",
-                "EQUIPE": "Equipe",
-                "FALTAS": st.column_config.NumberColumn("Nº de Faltas", format="%d")
-            }
-        )
+        presencas = (df_final[df_final['STATUS_PRESENCA'] == 'Presente']
+                    .groupby(['NOME', 'EQUIPE'])['DATA']
+                    .count()
+                    .reset_index(name='PRESENCAS')
+                    .sort_values(by='PRESENCAS', ascending=False)
+                    .head(5))
         
         st.bar_chart(
-            top_funcionarios.set_index('NOME')['FALTAS'],
+            presencas.set_index('NOME')['PRESENCAS'],
+            color="#1E3A8A",
+            use_container_width=True
+        )
+        st.dataframe(presencas, hide_index=True, use_container_width=True)
+
+with g2:
+    st.markdown("**Top 3 Funcionários com Menos Faltas**")
+    if not df_final.empty:
+        todas_pessoas = df_final[['NOME', 'EQUIPE']].drop_duplicates()
+        faltas = (df_final[df_final['STATUS_PRESENCA'] == 'Falta']
+                 .groupby(['NOME', 'EQUIPE'])['DATA']
+                 .count()
+                 .reset_index(name='FALTAS'))
+        
+        ranking = pd.merge(todas_pessoas, faltas, on=['NOME', 'EQUIPE'], how='left').fillna(0)
+        ranking['FALTAS'] = ranking['FALTAS'].astype(int)
+        top_menos_faltas = ranking.sort_values(by='FALTAS', ascending=True).head(3)
+        
+        st.bar_chart(
+            top_menos_faltas.set_index('NOME')['FALTAS'],
             color="#22C55E",
             use_container_width=True
         )
-    else:
-        st.info("Sem dados suficientes.")
+        st.dataframe(top_menos_faltas, hide_index=True, use_container_width=True)
+
+# Gráfico de comparação por Equipe (abaixo)
+st.markdown("**Presenças × Faltas por Equipe**")
+if not df_final.empty:
+    por_equipe = df_final.groupby('EQUIPE')['STATUS_PRESENCA'].value_counts().unstack(fill_value=0)
+    st.bar_chart(por_equipe, use_container_width=True, color=["#1E3A8A", "#EF4444"])
 
 st.markdown("<br>", unsafe_allow_html=True)
 
