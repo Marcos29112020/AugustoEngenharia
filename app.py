@@ -26,10 +26,13 @@ with col_logo:
 
 with col_titulo:
     st.markdown("""
-        <h1 style='margin-top: 32px;'>AUGUSTO ENGENHARIA</h1>
+        <h1 style='margin-top: 32px; color: #1E3A8A; font-weight: 900; 
+        font-size: 2.85rem; letter-spacing: -0.04em; line-height: 1.1;'>
+        AUGUSTO ENGENHARIA
+        </h1>
     """, unsafe_allow_html=True)
 
-st.markdown("<p class='subtitulo-painel'>Painel de Desempenho Operacional</p>", unsafe_allow_html=True)
+st.markdown("<p class='subtitulo-painel' style='margin-top: -8px;'>Painel de Desempenho Operacional</p>", unsafe_allow_html=True)
 st.markdown("<p class='legenda-contrato'>Contrato Ativo: Vibra Campo Limpo | Sincronização em Nuvem (Google Drive)</p>", unsafe_allow_html=True)
 st.markdown("<hr style='margin: 0.8rem 0 1.8rem 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
 
@@ -57,13 +60,18 @@ if df_raw is None or df_raw.empty:
     st.error("Nenhum dado encontrado ou link inválido.")
     st.stop()
 
-# Tratamento
+# Tratamento de colunas
 df_raw['TAREFA / ATIVIDADE'] = df_raw['TAREFA / ATIVIDADE'].fillna("").astype(str).str.strip()
 df_raw['OBSERVAÇÕES'] = df_raw.get('OBSERVAÇÕES', "").fillna("").astype(str).str.strip()
 
+# Regra de Presença
 df_raw['STATUS_PRESENCA'] = df_raw['TAREFA / ATIVIDADE'].str.upper().apply(
     lambda x: "Falta" if "FALTOU" in x or "AUSENTE" in x or x == "" else "Presente"
 )
+
+# Coluna para identificar quem realmente pertence à obra
+palavras_excluir = ['EMPRESTADO', 'TRANSFERIDO', 'OUTRA OBRA', 'CEDIDO', 'FOI PARA']
+df_raw['PERTENCE_A_OBRA'] = ~df_raw['OBSERVAÇÕES'].str.upper().str.contains('|'.join(palavras_excluir), na=False)
 
 df_raw['MES_ANO'] = df_raw['DATETIME'].dt.strftime('%m/%Y - %B')
 
@@ -73,7 +81,10 @@ st.sidebar.markdown("<h2 style='font-size:1.2rem; color:#0F172A; font-weight:700
 equipes = ["Todos"] + sorted(list(df_raw['EQUIPE'].dropna().unique()))
 equipe_sel = st.sidebar.selectbox("Filtro por Equipe", equipes)
 
-df_filt_nome = df_raw[df_raw['EQUIPE'] == equipe_sel] if equipe_sel != "Todos" else df_raw
+# Filtra apenas funcionários que pertencem à obra
+df_func_ativos = df_raw[df_raw['PERTENCE_A_OBRA'] == True]
+
+df_filt_nome = df_func_ativos[df_func_ativos['EQUIPE'] == equipe_sel] if equipe_sel != "Todos" else df_func_ativos
 nomes = ["Todos"] + sorted(list(df_filt_nome['NOME'].dropna().unique()))
 nome_sel = st.sidebar.selectbox("Filtro por Funcionário", nomes)
 
@@ -102,19 +113,23 @@ if isinstance(datas_sel, (list, tuple)) and len(datas_sel) == 2:
 total_reg = len(df_final)
 total_faltas = len(df_final[df_final['STATUS_PRESENCA'] == "Falta"])
 total_pres = total_reg - total_faltas
+total_func_ativos = df_func_ativos['NOME'].nunique()
 
 c1, c2, c3, c4 = st.columns(4)
 with c1: st.metric("Total de Lançamentos", f"{total_reg}")
-with c2: st.metric("Funcionários Ativos", f"{df_final['NOME'].nunique()}")
+with c2: st.metric("Funcionários Ativos", f"{total_func_ativos}")
 with c3: st.metric("Presenças Confirmadas", f"{total_pres}")
 with c4: st.metric("Faltas Registradas 🚨", f"{total_faltas}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ===================== LISTA DE FUNCIONÁRIOS =====================
-st.subheader(f"👥 Funcionários Ativos ({df_raw['NOME'].nunique()})")
-st.dataframe(df_raw[['NOME', 'EQUIPE']].drop_duplicates().sort_values('NOME'), 
-             hide_index=True, use_container_width=True)
+# ===================== LISTA DE FUNCIONÁRIOS ATIVOS =====================
+st.subheader(f"👥 Funcionários Ativos da Obra ({total_func_ativos})")
+st.dataframe(
+    df_func_ativos[['NOME', 'EQUIPE']].drop_duplicates().sort_values('NOME'),
+    hide_index=True, 
+    use_container_width=True
+)
 
 st.markdown("---")
 
@@ -124,26 +139,25 @@ st.markdown("### 📊 Análise de Desempenho")
 g1, g2 = st.columns(2)
 
 with g1:
-    st.markdown("**1. Evolução dos Serviços (Principais Atividades)**")
+    st.markdown("**Evolução dos Serviços (Principais Atividades)**")
     if not df_final.empty:
-        servicos = df_final['TAREFA / ATIVIDADE'].value_counts().head(10)
+        servicos = df_final['TAREFA / ATIVIDADE'].value_counts().head(8)
         st.bar_chart(servicos, color="#1E3A8A", use_container_width=True)
 
 with g2:
-    st.markdown("**2. Funcionários Menos Faltosos**")
+    st.markdown("**Funcionários Menos Faltosos**")
     if not df_final.empty:
-        presenca_rate = (df_final.groupby('NOME')['STATUS_PRESENCA']
-                        .apply(lambda x: (x == 'Presente').sum())
-                        .sort_values(ascending=False).head(8))
-        st.bar_chart(presenca_rate, color="#22C55E", use_container_width=True)
+        presenca = (df_final.groupby('NOME')['STATUS_PRESENCA']
+                   .apply(lambda x: (x == 'Presente').sum())
+                   .sort_values(ascending=False).head(6))
+        st.bar_chart(presenca, color="#22C55E", use_container_width=True)
 
-# 3. Aproveitamento por Equipe
-st.markdown("**3. Aproveitamento por Equipe**")
+st.markdown("**Aproveitamento por Equipe**")
 if not df_final.empty:
     por_equipe = df_final.groupby('EQUIPE').agg(
         QTD_PESSOAS=('NOME', 'nunique'),
         TRABALHO_REALIZADO=('TAREFA / ATIVIDADE', 'count')
-    ).sort_values('TRABALHO_REALIZADO', ascending=False)
+    )
     st.dataframe(por_equipe, use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
