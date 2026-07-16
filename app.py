@@ -358,9 +358,17 @@ with tab_fechamento:
                     return f'color:{COR_SUCESSO}; font-weight:600;'
                 return ''
 
-            styled = (df_fechamento.style
-                      .applymap(destaca_falta, subset=['DIAS DE FALTA'])
-                      .applymap(destaca_presenca, subset=['DIAS NA OBRA']))
+            # Styler.applymap() foi descontinuado em versões recentes do pandas
+            # em favor de Styler.map(). Usamos map() e caímos para applymap()
+            # só se estiver rodando numa versão bem antiga do pandas.
+            estilo = df_fechamento.style
+            try:
+                estilo = estilo.map(destaca_falta, subset=['DIAS DE FALTA'])
+                estilo = estilo.map(destaca_presenca, subset=['DIAS NA OBRA'])
+            except AttributeError:
+                estilo = estilo.applymap(destaca_falta, subset=['DIAS DE FALTA'])
+                estilo = estilo.applymap(destaca_presenca, subset=['DIAS NA OBRA'])
+            styled = estilo
 
             st.dataframe(styled, use_container_width=True, hide_index=True)
         else:
