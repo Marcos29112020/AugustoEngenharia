@@ -63,10 +63,20 @@ if df_raw is None or df_raw.empty:
 # Tratamento de colunas
 df_raw['TAREFA / ATIVIDADE'] = df_raw['TAREFA / ATIVIDADE'].fillna("").astype(str).str.strip()
 df_raw['OBSERVAÇÕES'] = df_raw.get('OBSERVAÇÕES', "").fillna("").astype(str).str.strip()
+df_raw['NOME'] = df_raw['NOME'].fillna("").astype(str).str.strip()
+df_raw['EQUIPE'] = df_raw['EQUIPE'].fillna("").astype(str).str.strip()
 
 # Regra de Presença
-df_raw['STATUS_PRESENCA'] = df_raw['TAREFA / ATIVIDADE'].str.upper().apply(
-    lambda x: "Falta" if "FALTOU" in x or "AUSENTE" in x or x == "" else "Presente"
+# A partir de 07/2026 as faltas passaram a ser registradas na coluna OBSERVAÇÕES
+# (e, às vezes, ainda na TAREFA / ATIVIDADE, como fallback). Por isso a checagem
+# precisa olhar as duas colunas juntas.
+# IMPORTANTE: não usamos mais "TAREFA vazia = Falta", porque isso gerava falso
+# positivo para quem não preenche TAREFA por rotina (ex: Analista, Encarregado)
+# e para dias com apontamento ainda incompleto (ex: dia corrente).
+palavras_falta = ['FALTOU', 'AUSENTE']
+texto_busca_falta = (df_raw['TAREFA / ATIVIDADE'] + " " + df_raw['OBSERVAÇÕES']).str.upper()
+df_raw['STATUS_PRESENCA'] = texto_busca_falta.apply(
+    lambda x: "Falta" if any(p in x for p in palavras_falta) else "Presente"
 )
 
 # Coluna para identificar quem realmente pertence à obra
