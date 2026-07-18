@@ -194,17 +194,39 @@ df_raw['EQUIPE'] = df_raw['EQUIPE'].fillna("").astype(str).str.strip()
 # atestado, licença, consulta/exame médico) das NÃO JUSTIFICADAS. Isso evita
 # que uma falta por internação, por exemplo, seja tratada com o mesmo peso
 # visual (vermelho/alarme) de uma falta sem explicação nenhuma.
+# Regra de Presença
+# A partir de 07/2026 as faltas passaram a ser registradas na coluna OBSERVAÇÕES
+# (e, às vezes, ainda na TAREFA / ATIVIDADE, como fallback). Por isso a checagem
+# precisa olhar as duas colunas juntas. Não usamos mais "TAREFA vazia = Falta".
+#
+# NOVO: dentro das faltas, separamos as JUSTIFICADAS (internado, treinamento,
+# atestado, licença, consulta/exame médico, ou quando o funcionário JUSTIFICOU
+# o motivo) das NÃO JUSTIFICADAS. "JUSTIFICOU" e "JUSTIFICATIVA" são tratados
+# como sinônimos — mas com cuidado: "SEM JUSTIFICATIVA" e "NÃO JUSTIFICOU" são
+# o OPOSTO (a pessoa faltou e não deu satisfação nenhuma), então são tratados
+# como negação e continuam contando como falta grave.
+import re
+
 palavras_falta = ['FALTOU', 'AUSENTE']
 palavras_justificativa = [
     'INTERNADO', 'INTERNADA', 'HOSPITAL', 'TREINAMENTO', 'CURSO',
     'ATESTADO', 'LICENÇA', 'LICENCA', 'CONSULTA', 'EXAME',
-    'JUSTIFICADA', 'JUSTIFICADO'
+    'JUSTIFICADA', 'JUSTIFICADO', 'JUSTIFICOU', 'JUSTIFICATIVA',
+    'POUCA FRENTE DE TRABALHO', 'SEM FRENTE DE SERVIÇO', 'SEM FRENTE DE TRABALHO',
+]
+# Frases que contêm a raiz "justific..." mas significam o CONTRÁRIO de justificado
+padroes_negacao = [
+    r'SEM\s+JUSTIFICATIV', r'N[ÃA]O\s+JUSTIFICOU', r'SEM\s+JUSTIFICAR',
 ]
 
 def classificar_status(tarefa, obs):
     texto = f"{tarefa} {obs}".upper()
-    tem_falta_explicita = any(p in texto for p in palavras_falta)
-    tem_justificativa = any(j in texto for j in palavras_justificativa)
+    texto_normalizado = re.sub(r'\s+', ' ', texto)  # colapsa espaços duplos
+
+    tem_falta_explicita = any(p in texto_normalizado for p in palavras_falta)
+    tem_negacao = any(re.search(padrao, texto_normalizado) for padrao in padroes_negacao)
+    tem_justificativa = (any(j in texto_normalizado for j in palavras_justificativa)
+                          and not tem_negacao)
     tarefa_vazia = tarefa.strip() == ""
 
     # Uma justificativa (ex: "INTERNADO - APENDICITE") sozinha, sem a palavra
@@ -256,7 +278,10 @@ nome_sel = st.sidebar.selectbox("Filtro por Funcionário", nomes)
 filtro_presenca = st.sidebar.radio("Filtro de Frequência", ["Todos", "Apenas Presentes", "Apenas Faltas"])
 
 df_filt_tar = df_raw[df_raw['STATUS_PRESENCA'] == "Presente"]
-tarefas = ["Todos"] + sorted(list(df_filt_tar['TAREFA / ATIVIDADE'].dropna().unique()))
+# Analista e Encarregado não preenchem TAREFA por rotina — isso deixava uma
+# opção em branco no dropdown, que não representa uma tarefa real.
+tarefas_validas = [t for t in df_filt_tar['TAREFA / ATIVIDADE'].dropna().unique() if t.strip() != ""]
+tarefas = ["Todos"] + sorted(tarefas_validas)
 tarefa_sel = st.sidebar.selectbox("Filtro por Tarefa / Atividade", tarefas)
 
 data_min, data_max = df_raw['DATA'].min(), df_raw['DATA'].max()
