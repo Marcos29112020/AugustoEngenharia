@@ -23,7 +23,7 @@ st.markdown(f"""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
     html, body, [class*="css"] {{ font-family: 'Inter', sans-serif; }}
-    .stApp {{ background-color: {COR_FUNDO}; }}
+    .stApp {{ background: radial-gradient(circle at top left, #F8FAFC 0%, {COR_FUNDO} 45%, #E9EEF5 100%); }}
     .main .block-container {{ padding-top: 1.8rem; padding-bottom: 2.5rem; max-width: 96%; }}
 
     h1 {{ color: {COR_PRIMARIA}; font-weight: 900; letter-spacing: -0.04em; }}
@@ -189,15 +189,55 @@ df_raw['EQUIPE'] = df_raw['EQUIPE'].fillna("").astype(str).str.strip()
 # A partir de 07/2026 as faltas passaram a ser registradas na coluna OBSERVAÇÕES
 # (e, às vezes, ainda na TAREFA / ATIVIDADE, como fallback). Por isso a checagem
 # precisa olhar as duas colunas juntas. Não usamos mais "TAREFA vazia = Falta".
+#
+# NOVO: dentro das faltas, separamos as JUSTIFICADAS (internado, treinamento,
+# atestado, licença, consulta/exame médico) das NÃO JUSTIFICADAS. Isso evita
+# que uma falta por internação, por exemplo, seja tratada com o mesmo peso
+# visual (vermelho/alarme) de uma falta sem explicação nenhuma.
 palavras_falta = ['FALTOU', 'AUSENTE']
-texto_busca_falta = (df_raw['TAREFA / ATIVIDADE'] + " " + df_raw['OBSERVAÇÕES']).str.upper()
-df_raw['STATUS_PRESENCA'] = texto_busca_falta.apply(
-    lambda x: "Falta" if any(p in x for p in palavras_falta) else "Presente"
-)
+palavras_justificativa = [
+    'INTERNADO', 'INTERNADA', 'HOSPITAL', 'TREINAMENTO', 'CURSO',
+    'ATESTADO', 'LICENÇA', 'LICENCA', 'CONSULTA', 'EXAME',
+    'JUSTIFICADA', 'JUSTIFICADO'
+]
 
-# Coluna para identificar quem realmente pertence à obra
-palavras_excluir = ['EMPRESTADO', 'TRANSFERIDO', 'OUTRA OBRA', 'CEDIDO', 'FOI PARA']
-df_raw['PERTENCE_A_OBRA'] = ~df_raw['OBSERVAÇÕES'].str.upper().str.contains('|'.join(palavras_excluir), na=False)
+def classificar_status(tarefa, obs):
+    texto = f"{tarefa} {obs}".upper()
+    tem_falta_explicita = any(p in texto for p in palavras_falta)
+    tem_justificativa = any(j in texto for j in palavras_justificativa)
+    tarefa_vazia = tarefa.strip() == ""
+
+    # Uma justificativa (ex: "INTERNADO - APENDICITE") sozinha, sem a palavra
+    # "FALTOU", já é motivo de ausência quando a TAREFA está vazia — ninguém
+    # escreve "internado" numa linha e depois preenche a tarefa do dia.
+    # Se a TAREFA está preenchida, a pessoa claramente trabalhou naquele dia,
+    # então uma menção a "treinamento" na observação é sobre atividade no
+    # canteiro, não uma ausência.
+    eh_ausencia = tem_falta_explicita or (tarefa_vazia and tem_justificativa)
+
+    if eh_ausencia:
+        return "Falta Justificada" if tem_justificativa else "Falta Não Justificada"
+    return "Presente"
+
+df_raw['STATUS_PRESENCA'] = df_raw.apply(
+    lambda linha: classificar_status(linha['TAREFA / ATIVIDADE'], linha['OBSERVAÇÕES']), axis=1
+)
+STATUS_FALTA = ["Falta Justificada", "Falta Não Justificada"]
+
+# Coluna para identificar quem realmente pertence à obra HOJE.
+# Antes, essa checagem olhava linha por linha isoladamente: se um funcionário
+# tivesse sido transferido no dia 10, mas tivesse 9 dias de registro anterior
+# sem a observação de transferência, ele continuava contando como "ativo"
+# (bug). Agora usamos o ÚLTIMO registro de cada NOME — é o retrato mais
+# recente da situação da pessoa — para decidir se ela ainda pertence à obra.
+palavras_excluir = ['EMPRESTADO', 'TRANSFERIDO', 'TRANFERIDO', 'OUTRA OBRA', 'CEDIDO', 'FOI PARA']
+ultimo_registro = df_raw.sort_values('DATA').groupby('NOME', as_index=False).tail(1)
+texto_ultimo_registro = (ultimo_registro['TAREFA / ATIVIDADE'] + " " + ultimo_registro['OBSERVAÇÕES']).str.upper()
+ultimo_registro = ultimo_registro.assign(
+    PERTENCE_A_OBRA=~texto_ultimo_registro.str.contains('|'.join(palavras_excluir), na=False)
+)
+nomes_ativos_hoje = set(ultimo_registro.loc[ultimo_registro['PERTENCE_A_OBRA'], 'NOME'])
+df_raw['PERTENCE_A_OBRA'] = df_raw['NOME'].isin(nomes_ativos_hoje)
 
 df_raw['MES_ANO'] = df_raw['DATETIME'].dt.strftime('%m/%Y - %B')
 
@@ -228,7 +268,7 @@ if equipe_sel != "Todos": df_final = df_final[df_final['EQUIPE'] == equipe_sel]
 if nome_sel != "Todos": df_final = df_final[df_final['NOME'] == nome_sel]
 if tarefa_sel != "Todos": df_final = df_final[df_final['TAREFA / ATIVIDADE'] == tarefa_sel]
 if filtro_presenca == "Apenas Presentes": df_final = df_final[df_final['STATUS_PRESENCA'] == "Presente"]
-elif filtro_presenca == "Apenas Faltas": df_final = df_final[df_final['STATUS_PRESENCA'] == "Falta"]
+elif filtro_presenca == "Apenas Faltas": df_final = df_final[df_final['STATUS_PRESENCA'].isin(STATUS_FALTA)]
 
 if isinstance(datas_sel, (list, tuple)) and len(datas_sel) == 2:
     data_inicio, data_fim = datas_sel
@@ -236,8 +276,9 @@ if isinstance(datas_sel, (list, tuple)) and len(datas_sel) == 2:
 
 # ===================== KPIs =====================
 total_reg = len(df_final)
-total_faltas = len(df_final[df_final['STATUS_PRESENCA'] == "Falta"])
-total_pres = total_reg - total_faltas
+total_falta_justif = len(df_final[df_final['STATUS_PRESENCA'] == "Falta Justificada"])
+total_falta_nao_justif = len(df_final[df_final['STATUS_PRESENCA'] == "Falta Não Justificada"])
+total_pres = total_reg - total_falta_justif - total_falta_nao_justif
 total_func_ativos = df_func_ativos['NOME'].nunique()
 taxa_presenca = round((total_pres / total_reg) * 100, 1) if total_reg > 0 else 0.0
 
@@ -248,12 +289,33 @@ elif taxa_presenca >= 80:
 else:
     cor_taxa = COR_ALERTA
 
-c1, c2, c3, c4, c5 = st.columns(5)
+# ---- Banner executivo: leitura de 3 segundos do estado geral da obra ----
+if total_falta_nao_justif == 0:
+    status_cor, status_bg, status_icone = COR_SUCESSO, "#ECFDF5", "🟢"
+    status_texto = "Operação estável — nenhuma falta não justificada no período filtrado."
+elif total_falta_nao_justif <= 2:
+    status_cor, status_bg, status_icone = "#D97706", "#FFFBEB", "🟡"
+    status_texto = f"Atenção — {total_falta_nao_justif} falta(s) não justificada(s) no período filtrado."
+else:
+    status_cor, status_bg, status_icone = COR_ALERTA, "#FEF2F2", "🔴"
+    status_texto = f"Alerta — {total_falta_nao_justif} faltas não justificadas no período filtrado. Requer ação da liderança."
+
+st.markdown(f"""
+    <div style='background:{status_bg}; border:1px solid {status_cor}33; border-left:5px solid {status_cor};
+                border-radius:12px; padding:12px 18px; margin-bottom:18px;
+                display:flex; align-items:center; gap:10px;'>
+        <span style='font-size:1.1rem;'>{status_icone}</span>
+        <span style='font-size:0.95rem; font-weight:700; color:#0F172A;'>{status_texto}</span>
+    </div>
+""", unsafe_allow_html=True)
+
+c1, c2, c3, c4, c5, c6 = st.columns(6)
 with c1: kpi_card("Total de Lançamentos", f"{total_reg}", "📋", COR_PRIMARIA)
 with c2: kpi_card("Funcionários Ativos", f"{total_func_ativos}", "👷", COR_PRIMARIA)
 with c3: kpi_card("Presenças Confirmadas", f"{total_pres}", "✅", COR_SUCESSO)
-with c4: kpi_card("Faltas Registradas", f"{total_faltas}", "🚨", "#DC2626", destaque=True)
-with c5: kpi_card("Taxa de Presença", f"{taxa_presenca}%", "📈", cor_taxa)
+with c4: kpi_card("Faltas Justificadas", f"{total_falta_justif}", "📄", "#D97706")
+with c5: kpi_card("Faltas Não Justificadas", f"{total_falta_nao_justif}", "🚨", "#DC2626", destaque=True)
+with c6: kpi_card("Taxa de Presença", f"{taxa_presenca}%", "📈", cor_taxa)
 
 st.markdown("<div style='margin-top:24px;'></div>", unsafe_allow_html=True)
 
@@ -277,8 +339,18 @@ with tab_geral:
         with g1:
             st.markdown("**Tarefas Mais Frequentes**")
             if not df_final.empty:
-                servicos = df_final['TAREFA / ATIVIDADE'].value_counts().head(6)
-                grafico_barra_horizontal(servicos, COR_PRIMARIA)
+                # Encarregado e Analista não preenchem TAREFA por rotina (fazem
+                # gestão, não execução de campo) — incluí-los aqui só inflava o
+                # gráfico com ruído. Tarefas em branco também são descartadas.
+                df_tarefas = df_final[
+                    (~df_final['EQUIPE'].isin(['Encarregado', 'Analista'])) &
+                    (df_final['TAREFA / ATIVIDADE'] != "")
+                ]
+                servicos = df_tarefas['TAREFA / ATIVIDADE'].value_counts().head(6)
+                if not servicos.empty:
+                    grafico_barra_horizontal(servicos, COR_PRIMARIA)
+                else:
+                    st.info("Sem tarefas registradas no período.")
             else:
                 st.info("Sem dados no período.")
 
@@ -339,18 +411,27 @@ with tab_fechamento:
 
         if not df_mes.empty:
             df_presencas_calc = df_mes[df_mes['STATUS_PRESENCA'] == 'Presente'].groupby(['EQUIPE', 'NOME'])['DATA'].nunique().reset_index(name='DIAS NA OBRA')
-            df_faltas_calc = df_mes[df_mes['STATUS_PRESENCA'] == 'Falta'].groupby(['EQUIPE', 'NOME'])['DATA'].nunique().reset_index(name='DIAS DE FALTA')
+            df_falta_justif_calc = df_mes[df_mes['STATUS_PRESENCA'] == 'Falta Justificada'].groupby(['EQUIPE', 'NOME'])['DATA'].nunique().reset_index(name='FALTA JUSTIFICADA')
+            df_falta_nao_justif_calc = df_mes[df_mes['STATUS_PRESENCA'] == 'Falta Não Justificada'].groupby(['EQUIPE', 'NOME'])['DATA'].nunique().reset_index(name='FALTA NÃO JUSTIFICADA')
             todas_equipes_nomes = df_mes[['EQUIPE', 'NOME']].drop_duplicates()
             df_fechamento = pd.merge(todas_equipes_nomes, df_presencas_calc, on=['EQUIPE', 'NOME'], how='left').fillna(0)
-            df_fechamento = pd.merge(df_fechamento, df_faltas_calc, on=['EQUIPE', 'NOME'], how='left').fillna(0)
+            df_fechamento = pd.merge(df_fechamento, df_falta_justif_calc, on=['EQUIPE', 'NOME'], how='left').fillna(0)
+            df_fechamento = pd.merge(df_fechamento, df_falta_nao_justif_calc, on=['EQUIPE', 'NOME'], how='left').fillna(0)
             df_fechamento['DIAS NA OBRA'] = df_fechamento['DIAS NA OBRA'].astype(int)
-            df_fechamento['DIAS DE FALTA'] = df_fechamento['DIAS DE FALTA'].astype(int)
+            df_fechamento['FALTA JUSTIFICADA'] = df_fechamento['FALTA JUSTIFICADA'].astype(int)
+            df_fechamento['FALTA NÃO JUSTIFICADA'] = df_fechamento['FALTA NÃO JUSTIFICADA'].astype(int)
             df_fechamento = df_fechamento.sort_values(by=['EQUIPE', 'NOME'])
 
-            # Formatação condicional: faltas > 0 saltam aos olhos em vermelho
-            def destaca_falta(val):
+            # Formatação condicional: só a falta NÃO justificada saltam aos olhos
+            # em vermelho — a justificada fica em âmbar, sem alarme desnecessário.
+            def destaca_falta_grave(val):
                 if isinstance(val, (int, float)) and val > 0:
                     return f'background-color:#FEE2E2; color:{COR_ALERTA}; font-weight:700;'
+                return ''
+
+            def destaca_falta_leve(val):
+                if isinstance(val, (int, float)) and val > 0:
+                    return 'color:#D97706; font-weight:600;'
                 return ''
 
             def destaca_presenca(val):
@@ -363,10 +444,12 @@ with tab_fechamento:
             # só se estiver rodando numa versão bem antiga do pandas.
             estilo = df_fechamento.style
             try:
-                estilo = estilo.map(destaca_falta, subset=['DIAS DE FALTA'])
+                estilo = estilo.map(destaca_falta_grave, subset=['FALTA NÃO JUSTIFICADA'])
+                estilo = estilo.map(destaca_falta_leve, subset=['FALTA JUSTIFICADA'])
                 estilo = estilo.map(destaca_presenca, subset=['DIAS NA OBRA'])
             except AttributeError:
-                estilo = estilo.applymap(destaca_falta, subset=['DIAS DE FALTA'])
+                estilo = estilo.applymap(destaca_falta_grave, subset=['FALTA NÃO JUSTIFICADA'])
+                estilo = estilo.applymap(destaca_falta_leve, subset=['FALTA JUSTIFICADA'])
                 estilo = estilo.applymap(destaca_presenca, subset=['DIAS NA OBRA'])
             styled = estilo
 
